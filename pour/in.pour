@@ -1,0 +1,134 @@
+# Pour granular particles into chute container, then induce flow
+
+atom_style	sphere #granular models setting
+boundary	fm fm fm  #sets x, y, z boundary conditions (p = periodic, f = non-periodic and fixed)
+newton		off #Newton's 3rd law on or off for walls and pair-pair interaction
+
+# parameters that affect the inter-processor communication of atom information that occurs each  timestep as coordinates and other properties are exchanged between neighboring processors and stored as properties of ghost atoms. vel = communicate velocity info with ghost atoms (yes or no follows)
+
+comm_modify	vel yes 
+
+
+# defines a geometric region of space. syntax: (regionID)  (style: block args = xlo xhi ylo yhi zlo zhi)  (units value = lattice or box; box = the geometry is defined in simulation box units)
+
+region		reg block -10 10 -10 10 -0.5 16 units box
+
+# creates a simulation box based on the specified region: syntax:  (#atoms in simulation)  (ID)  
+create_box	1 reg
+
+# parameters that affect the building of pairwise neighbor lists. Snyntax: (extra distance beyond force cutoff (distance units))  (bin or nsq or multi or multi/old: bin =  creates the list by binning which is an operation that scales linearly with N/P, the number of atoms per processor where N = total number of atoms and P = number of processors.)
+
+neighbor	0.2 bin
+
+#sets parameters that affect the building and use of pairwise neighbor lists. Syntax: (keyword: delay = never build new lists until at least N steps after the previous build. )  (N steps)
+
+neigh_modify	delay 0
+
+# IMPORTANT NOTE: these values of stiffness (2000) and timestep (0.001)
+# are used in this example file to produce a quick simulation and movie.
+# More appropriate values for realistic simulations would be
+# k = 2.0e5 and dt = 0.0001, as in bench/in.chute.
+
+# The type of particle-particle interaction. Style:  (Kind of interaction: gran = frictional force between particles, hooke = kind of particle-particle interaction (Hooke's law), history = takes into account the sheer force)  (elastic constant for normal particle repulsion)  (elastic constant for tangential contact)  (damping coefficient for collisions in normal direction)  (damping coefficient for collisions in tangential direction)
+
+pair_style      gran/hooke/history 2000.0 NULL 50.0 NULL 0.5 0
+
+# For granular styles there are no additional coefficients to set for each pair of atom types via the pair_coeff command. All settings are global and are made via the pair_style command. However you must still use the pair_coeff for all pairs of granular atom types. 
+
+pair_coeff	* *
+
+# Time step (dt = size of time step)
+
+timestep	0.00001
+
+# Set a fix that will be applied to a group of atoms.  (ID)  (group-ID)  (Style:nve/sphere =  Perform constant NVE integration to update position, velocity, and angular velocity for finite-size spherical particles in the group each timestep.)
+
+fix		1 all nve/sphere
+
+# Set a fix that will be applied to a group of atoms.  (ID)  (group-ID)  (Style: gravity = add gravity to particles (grain))  (size of acceleration (force/mass units))  (Style:  allows an arbitrary 3d direction to be specified for the acceleration vector.)  (phi angle of acceleration in Spherical coord (for -z = 0))  (theta angle of acceleration in Spherical coord (for -z = 180 or -180))
+
+fix		2 all gravity 1.0 spherical 0.0 -180.0
+
+# Set a fix that will be applied to a group of atoms.  (ID)  (group-ID) (Bound the simulation domain of a granular system with a frictional wall: wall/gran)  (style of force interactions between particles and wall: hooke/history = Hooke's law with sheer force)  (elastic constant for normal particle repulsion)  (elastic constant for tangential contact)  (damping coefficient for collisions in normal direction)  (damping coefficient for collisions in tangential direction)  (static yield criterion (unitless value between 0.0 and 1.0e4))  (0 or 1 if tangential damping force is excluded or included)  (wallstyle = xplane or yplane or zplane or zcylinder)  (position of lower plane (distance units), either can be NULL)  (position of upper plane (distance units), either can be NULL)
+
+fix		zlower all wall/gran hooke/history 2000.0 NULL 50.0 NULL 0.5 0 &
+		zplane 0.0 2000.0 
+
+fix		xsides all wall/gran hooke/history 2000.0 NULL 50.0 NULL 0.0 0 &
+		xplane -10.0 10.0 
+
+fix		ysides all wall/gran hooke/history 2000.0 NULL 50.0 NULL 0.0 0 &
+		yplane -10.0 10.0 
+
+
+
+
+#defines a geometric region of space. (ID)  (Style: block = cube )  (xlo)  (xhi)  (ylo)  (yhi)  (zlo)  (zhi) (units value = lattice or box; box = the geometry is defined in simulation box units)
+
+region		slab block -9.0 9.0 -9.0 9.0 10.0 15.0 units box
+
+#Set a fix that will be applied to a group of atoms.  (ID)  (group-ID)  (Style: pour =  pour new atoms/molecules into a granular simulation domain)  (# of particles to insert)  (type = atom type to assign to inserted particles)  (seed)  (keywrds: vol = specifies what volume fraction of the insertion volume will be filled with particles. )  (desired volume fraction for filling insertion volume)  (max # of insertion attempts per particle)
+
+fix		ins all pour 100 1 300719 vol 0.13 50 region slab
+
+#particle insertion
+#fix             ins nve_group insert/stream seed 32452867 distributiontemplate pdd1 nparticles 6000 massrate 0.1 #insert_every 1000 overlapcheck yes all_in no vel constant 0.0 0.0 -1.0 insertion_face inface 
+
+
+# Define a computation that will be performed on a group of atoms.   (ID)  (group-ID)  (style = erotate/sphere: rotational energy of spherical particles)
+
+compute		1 all erotate/sphere
+
+# Set the style and content for printing thermodynamic data  (style: custom allows you to specify which of the keywords listed above you want printed on each thermodynamic timestep. )  (keywords: atoms = # of atoms )  (keywords: ke = kinetic energy)  (keywords: c_ID = global scalar value calculated by a compute with ID)  (keywords: vol = volume)
+
+thermo_style	custom step atoms ke c_1 vol
+
+#Compute and print thermodynamic info  (output thermodynamics every N timesteps)
+
+thermo		1000
+
+#Set options for how thermodynamic information is computed and printed.  (keyword: lost = determines whether LAMMPS checks for lost atoms each time it computes thermodynamics and what it does if atoms are lost.)  (ignore = ignore the atom)  (determines whether various thermodynamic output values are normalized by the number of atoms or not)  (no = not normalized) 
+
+thermo_modify	lost ignore norm no
+
+#Modify one or more parameters of a previously defined compute.  (compute ID)  (determines whether the number of atoms N in the compute group and their associated degrees of freedom are re-computed each time a temperature is computed.)  (Yes, they are recomputed)
+
+compute_modify	thermo_temp dynamic/dof yes
+
+#Dump a snapshot of atom quantities to one or more files every N timesteps in one of several styles.  (ID)  (group-ID)  (style = atom)  (dump every N timesteps = 1)  (file name for the data to be dumped into)
+
+dump		id all atom 100 dump.pour
+
+# Dump a snapshot of atom quantities to one or more files every N timesteps in one of several styles.  (ID)  (group-ID)  (style = image- generate image)  (dump every N timesteps = 1)  (file name for the data to be dumped into (set it in a image files with N in the name.)) (type = color)  (type)  (axes= determines if and how the coordinate axes are rendered as thin cylinders in the image) (yes, make axes)  (length of axes)  (diameter of axes)  (view = keyword determines the viewpoint from which the simulation box is viewed, looking towards the center point.)  (theta angle of view)  (phi angle of view)
+
+#insert the first particles so that dump is not empty
+#run    1
+#dump   dmp all custom/vtk 200 post/chute_*.vtk id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay #omegaz radius 
+#dump   dumpstress all mesh/gran/VTK 200 post/mesh_*.vtk stress wear cad
+
+
+#dump		2 all image 1000 image.*.jpg type type &
+#		axes yes 0.8 0.02 view 80 -30
+#Modify the parameters of a previously defined dump command.  (ID)  (pad = # of characters to convert timestep to)  (# of characters to convert timestep to)
+
+#dump_modify	2 pad 5
+
+#dump		3 all movie 1000 movie.mpg type type &
+#		axes yes 0.8 0.02 view 80 -30
+#dump_modify	3 pad 5
+
+#Run or continue dynamics for a specified number of timesteps.  (Number of time steps)
+
+run		1
+
+# Delete a fix that was previously defined with a fix command.  (ID)
+
+unfix		ins
+
+# Set a fix that will be applied to a group of atoms.  (ID)  (group-ID)   (Style: gravity = add gravity to particles (grain))  (size of acceleration (force/mass units))  (Style: chute = typically used for simulations of chute flow where the specified angle is the chute angle, with flow occurring in the +x direction.)  (chute angle = 26 degrees)
+
+fix		2 all gravity 1.0 chute 0.0
+
+#Run or continue dynamics for a specified number of timesteps.  (Number of time steps)
+
+run		1000000

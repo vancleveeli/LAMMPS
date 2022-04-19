@@ -1,0 +1,170 @@
+# pour two types of particles (cohesive and non-cohesive) into cylinder
+# 'turn' cylinder by changing direction of gravity, then rotate it.
+# This simulates a rotating drum powder characterization experiment.
+
+variable        name string rotating_drum_two_types
+
+atom_style      sphere
+#units           lj
+
+###############################################
+# Geometry-related parameters
+###############################################
+
+variable        boxx equal 20
+variable        boxy equal 20
+variable        boxz equal 50
+
+variable        part_r equal 0.25
+variable        part_d equal 2.0*${part_r}
+
+variable        N_part equal 7000 #number of particles
+variable        t_inbet_drop equal 15000  #time between drops (the run in the loop)
+variable        loopN equal ${N_part}  # number of loops to run
+variable        drop_t equal ${t_inbet_drop}/1  #take image every this many steps.
+variable        run_end equal 50000
+variable        total_runs equal ${N_part}*${t_inbet_drop}+${run_end}
+
+variable        drum_rad equal ${boxx}*0.5
+variable        drum_height equal ${boxz} #20
+variable        box_rad equal ${part_r}
+
+variable        xc equal 0.5*${boxx}
+variable        yc equal 0.5*${boxx}
+variable        zc equal 0.5*${boxz}
+variable        xlo equal ${xc}-${box_rad}/1.41421356237
+variable        xhi equal ${xc}+${box_rad}/1.41421356237
+variable        ylo equal ${yc}-${box_rad}/1.41421356237
+variable        yhi equal ${yc}+${box_rad}/1.41421356237
+variable        zlo equal ${boxz}-${boxz}*.05
+variable        zhi equal ${zlo}+${boxz}*.05
+
+###############################################
+# Particle-related parameters
+###############################################
+variable        rlo equal 0.25
+variable        rhi equal 0.5
+variable        dlo equal 2.0*${rlo}
+variable        dhi equal 2.0*${rhi}
+
+variable        cyl_rad_inner equal ${drum_rad}-1.1*${rhi}
+
+variable        dens equal 1.0
+
+#variable skin equal 0.4*${rhi}
+variable skin equal 0.01
+
+#############
+processors      * * *
+region          boxreg block 0 ${boxx} 0 ${boxy} 0 ${boxz}
+create_box      2 boxreg
+#change_box      all boundary p p f
+change_box      all boundary fm fm fm
+
+
+pair_style      gran/hooke/history 200.0 NULL 50.0 NULL 0.5 0
+pair_coeff	* *
+
+#pair_style      granular
+#pair_coeff      1 * hertz/material 1e10 0.2 0.3 tangential mindlin NULL 1.0 0.5 damping tsuji
+#pair_coeff      2 2 jkr 1e5 0.1 0.3 50 tangential mindlin NULL 1.0 0.5 rolling sds 1e3 1e3 0.1 twisting marshall #damping tsuji
+#pair_coeff      * * jkr 1e10 0.2 0.3 50 tangential mindlin NULL 1.0 0.5 damping tsuji
+
+
+#variable        theta equal 0
+
+#region          curved_wall cylinder z ${xc} ${yc} ${drum_rad} 0 ${drum_height} side in rotate v_theta ${xc}   #${yc} 0 0 0 1
+region          curved_wall cylinder z ${xc} ${yc} ${drum_rad} 0 ${drum_height} side in
+#region          bottom_wall plane ${xc} ${yc} 0 0 0 1 side in rotate v_theta ${xc} ${yc} 0 0 0 1
+region          bottom_wall plane ${xc} ${yc} 0 0 0 1 side in
+
+#region          insreg cylinder z ${xc} ${yc} ${cyl_rad_inner} ${drum_height} ${boxz}
+region          input  block ${xlo} ${xhi} ${ylo} ${yhi} ${zlo} ${zhi}
+
+#fix             0 all balance 100 1.0 shift xy 5 1.1
+fix             1 all nve/sphere
+fix             grav all gravity 10 vector 0 0 -1
+#fix             ins1 all pour 200 1 1234 region insreg diam range ${dlo} ${dhi} dens ${dens} ${dens}
+#fix             ins2 all pour 200 2 1234 region insreg diam range ${dlo} ${dhi} dens ${dens} ${dens}
+
+
+
+comm_modify     vel yes
+
+neighbor        ${skin} bin
+neigh_modify    delay 0 #every 1 check yes
+
+fix             3 all wall/gran/region granular hertz/material 1e5 0.1 0.3 tangential mindlin NULL 1.0 0.5 damping tsuji region curved_wall
+fix             4 all wall/gran/region granular hertz/material 1e5 0.1 0.3 tangential mindlin NULL 1.0 0.5 damping tsuji region bottom_wall
+
+#fix		4 all wall/gran granular hooke 2000.0 50.0 region bottom_wall  
+
+#fix		3 all wall/gran granular hooke 2000.0 50.0 region curved_wall
+
+
+compute		1 all erotate/sphere
+
+#thermo_style    custom step atoms ke v_theta
+thermo_style	custom step atoms ke c_1 vol
+thermo_modify   lost warn
+thermo          1000
+compute_modify	thermo_temp dynamic/dof yes
+
+timestep        0.00001
+
+#dump           1 all custom ${drop_t} ${name}.dump id type radius mass x y z
+
+#For removal later
+#compute         1 all property/atom radius
+#variable        zmax atom z+c_1>0.5*${drum_height}
+#group           delgroup dynamic all var zmax every 10000
+
+#run             1000
+
+dump		2 all image ${drop_t} jpg/image.*.jpg type type axes yes 0.8 0.02 view 80 -30 size 6400 3600#6400 3600
+dump		3 all image ${drop_t} jpg/image.top.*.jpg type type axes yes 0.8 0.02 view 0 0 size 6400 3600#6400 3600
+
+# Modify the parameters of a previously defined dump command.  
+# (ID)  (pad = # of characters to convert timestep to)  (# of characters to convert timestep to)
+
+dump_modify	2 pad 5
+dump_modify	3 pad 5
+
+#Remove any particles that are above z > 0.5*drum_height
+#delete_atoms    group delgroup
+
+#Add top lid
+#region          top_wall plane ${xc} ${yc} ${drum_height} 0 0 -1 side in rotate v_theta ${xc} ${yc} 0 0 0 1
+#fix             5 all wall/gran/region granular hertz/material 1e5 0.1 0.3 tangential mindlin NULL 1.0 0.5 #damping tsuji region top_wall
+
+# 'Turn' drum by switching the direction of gravity
+#unfix           grav
+#unfix           ins1
+#unfix           ins2
+#fix             grav all gravity 10 vector 0 -1 0
+
+#variable        theta equal 2*PI*elapsed/20000.0
+
+variable         sedN equal 1234
+#variable         it equal 1
+
+
+
+label            loop
+variable         a loop ${loopN}
+variable         seds equal ${sedN}#*${a}
+variable         remain equal ${loopN}-${a}
+print            "a = ${a}"
+print            "Sed = ${sedN}"
+print            "loop N = ${loopN}"
+print            "total loops = ${total_runs}"
+print            "runs remaining = ${remain}"
+fix              b all pour 1 1 ${seds} region input diam one ${part_d}
+
+#fix              b all pour 1 1 ${seds} region input  diam one ${part_d} #range ${dlo} ${dhi} dens ${dens} ${dens}
+run              ${t_inbet_drop} 
+next             a
+unfix            b
+jump             SELF loop
+#print            "steps between dumps = ${drop_t}"
+run ${run_end}

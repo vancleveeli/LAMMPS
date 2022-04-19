@@ -1,0 +1,28 @@
+# Pythono3 code to rename multiple
+# files in a directory or folder
+
+# importing os module
+import os
+
+# Function to rename multiple files
+def main():
+
+	folder = "/."
+	for count, filename in enumerate(os.listdir(folder)):
+                if len(filename) == 15:
+                  f = filename
+                  dst =  "0"+f[0:8
+		elif len(filename) == 16:
+                  f = filename
+                  dst = f[0:9]+".jpg"
+                  
+		# rename() function will
+		# rename all the files
+		#os.rename(src, dst)
+
+# Driver Code
+if __name__ == '__main__':
+	
+	# Calling main() function
+	main()
+

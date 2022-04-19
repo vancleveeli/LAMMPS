@@ -1,0 +1,228 @@
+LAMMPS (3 Mar 2020)
+OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (src/comm.cpp:94)
+  using 1 OpenMP thread(s) per MPI task
+# SRD diffusion demo - rigid star particles
+
+units		lj
+atom_style	sphere
+atom_modify	map array first big
+dimension	2
+
+# read in clusters of rigid bodies
+
+fix             molprop all property/atom mol
+WARNING: Fix property/atom mol or charge or rmass w/out ghost communication (src/fix_property_atom.cpp:121)
+read_data	data.star fix molprop NULL Molecules
+  orthogonal box = (-17.7245 -17.7245 -0.5) to (17.7245 17.7245 0.5)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  480 atoms
+  read_data CPU = 0.00111511 secs
+
+set		type 1 mass 1.0
+  480 settings made for mass
+group		big type 1
+480 atoms in group big
+velocity	big create 1.44 87287 loop geom
+
+# equilibrate big particles
+
+pair_style	soft 1.12
+pair_coeff	1 1 0.0
+pair_coeff	2 2 0.0 0.0
+pair_coeff	1 2 0.0 0.0
+
+variable        prefactor equal ramp(0,60)
+fix             soft all adapt 1 pair soft a * * v_prefactor
+
+neighbor	0.3 bin
+neigh_modify	delay 0 every 1 check yes
+
+fix		1 big rigid molecule
+30 rigid bodies with 480 atoms
+fix		2 all enforce2d
+
+#dump		1 all atom 10 dump.star.equil
+
+compute		tbig all temp/sphere
+thermo_modify	temp tbig
+
+thermo		100
+run		1000
+Neighbor list info ...
+  update every 1 steps, delay 0 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 1.42
+  ghost atom cutoff = 1.42
+  binsize = 0.71, bins = 50 50 2
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair soft, perpetual
+      attributes: half, newton on
+      pair build: half/bin/atomonly/newton
+      stencil: half/bin/2d/newton
+      bin: standard
+Per MPI rank memory allocation (min/avg/max) = 5.57 | 5.57 | 5.57 Mbytes
+Step Temp E_pair E_mol TotEng Press 
+       0    1.4508734            0            0   0.13299673    2.3909714 
+     100    4.4621841    4.1417037            0    4.5507372    0.5838522 
+     200    12.683417    7.1847656            0    8.3474121   0.82967829 
+     300    24.461216    9.4798538            0    11.722132    1.7337787 
+     400    31.495858    11.860676            0    14.747797     2.406317 
+     500    36.495971    14.321305            0    17.666769    1.9992703 
+     600    31.787841    17.649956            0    20.563842    1.9203773 
+     700     37.07703    20.058515            0    23.457242    2.2033112 
+     800    44.953699     22.13102            0    26.251775    2.2832546 
+     900    41.459333    25.220477            0    29.020916    3.4346715 
+    1000    45.889956    27.594944            0    31.801523    5.1022903 
+Loop time of 0.0845862 on 1 procs for 1000 steps with 480 atoms
+
+Performance: 5107213.957 tau/day, 11822.255 timesteps/s
+95.7% CPU use with 1 MPI tasks x 1 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0.036639   | 0.036639   | 0.036639   |   0.0 | 43.32
+Neigh   | 0.0094491  | 0.0094491  | 0.0094491  |   0.0 | 11.17
+Comm    | 0.0024311  | 0.0024311  | 0.0024311  |   0.0 |  2.87
+Output  | 0.00045606 | 0.00045606 | 0.00045606 |   0.0 |  0.54
+Modify  | 0.032276   | 0.032276   | 0.032276   |   0.0 | 38.16
+Other   |            | 0.003336   |            |       |  3.94
+
+Nlocal:    480 ave 480 max 480 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    53 ave 53 max 53 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    805 ave 805 max 805 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 805
+Ave neighs/atom = 1.67708
+Neighbor list builds = 171
+Dangerous builds = 0
+
+#undump		1
+unfix           soft
+unfix		1
+unfix		2
+
+# add small particles as hi density lattice
+
+region		plane block INF INF INF INF -0.001 0.001 units box
+lattice		sq 85.0
+Lattice spacing in x,y,z = 0.108465 0.108465 0.108465
+create_atoms	2 region plane
+Created 106929 atoms
+  create_atoms CPU = 0.0261754 secs
+
+set		type 2 mass 0.1
+  106929 settings made for mass
+group		small type 2
+106929 atoms in group small
+velocity	small create 1.0 593849 loop geom
+
+# delete overlaps
+# must set 1-2 cutoff to non-zero value
+
+pair_style	lj/cut 2.5
+pair_coeff	1 1 1.0 1.0
+pair_coeff	2 2 0.0 1.0 0.0
+pair_coeff	1 2 0.0 1.0 0.5
+
+delete_atoms	overlap 0.5 small big
+Neighbor list info ...
+  update every 1 steps, delay 0 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 2.8
+  ghost atom cutoff = 2.8
+  binsize = 1.4, bins = 26 26 1
+  2 neighbor lists, perpetual/occasional/extra = 1 1 0
+  (1) command delete_atoms, occasional
+      attributes: full, newton on
+      pair build: full/bin/atomonly
+      stencil: full/bin/2d
+      bin: standard
+  (2) pair lj/cut, perpetual
+      attributes: half, newton on
+      pair build: half/bin/atomonly/newton
+      stencil: half/bin/2d/newton
+      bin: standard
+WARNING: Delete_atoms cutoff > minimum neighbor cutoff (src/delete_atoms.cpp:338)
+Deleted 28032 atoms, new total = 79377
+
+# SRD run
+
+reset_timestep	0
+
+neighbor	0.3 multi
+neigh_modify	delay 0 every 1 check yes
+
+comm_modify	mode multi group big vel yes
+neigh_modify	include big
+
+# no pairwise interactions with small particles
+
+pair_style	lj/cut 2.5
+pair_coeff	1 1 1.0 1.0
+pair_coeff	2 2 0.0 1.0 0.0
+pair_coeff	1 2 0.0 1.0 0.0
+
+# use fix SRD to push small particles out from inside big ones
+# if comment out, big particles won't see SRD particles
+
+timestep	0.001
+
+fix		1 big rigid molecule
+30 rigid bodies with 480 atoms
+fix	        2 small srd 20 big 1.0 0.25 49894 shift yes 54979 		  search 0.2 collision slip inside ignore overlap yes
+fix		3 all enforce2d
+
+# diagnostics
+
+uncompute       tbig
+compute		tbig big temp/sphere
+variable	pebig equal pe*atoms/count(big)
+variable	ebig equal etotal*atoms/count(big)
+thermo_style	custom step temp f_2[8] etotal v_pebig v_ebig press 		f_2[1] f_2[2] f_2[3] f_2[4] f_2[5] 		f_2[6] f_2[7] f_2[8] f_2[9] f_2[10] f_2[11] f_2[12]
+WARNING: New thermo_style command, previous thermo_modify settings will be lost (src/output.cpp:708)
+
+thermo_modify	temp tbig
+WARNING: Temperature for thermo pressure is not for group all (src/thermo.cpp:485)
+thermo		1000
+
+#dump		1 all atom 1000 dump.star
+
+dump		1 all image 1000 image.*.jpg type type zoom 1.6
+dump_modify	1 pad 6 adiam 1 1 adiam 2 0.2
+
+run		100000
+SRD info:
+  SRD/big particles = 78897 480
+  big particle diameter max/min = 1 1
+  SRD temperature & lamda = 1 0.0632456
+  SRD max distance & max velocity = 0.252982 12.6491
+  SRD grid counts: 142 142 1
+  SRD grid size: request, actual (xyz) = 0.25, 0.249641 0.249641 1
+  SRD per actual grid cell = 5.58966
+  SRD viscosity = 0.235691
+  big/SRD mass density ratio = 0.141957
+  # of rescaled SRD velocities = 0
+  ave/max small velocity = 4.19249 7.72742
+  ave/max big velocity = 2.56681 7.23005
+Neighbor list info ...
+  update every 1 steps, delay 0 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 2.8
+  ghost atom cutoff = 2.8
+  binsize = 35.4491, bins = 1 1 1
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair lj/cut, perpetual
+      attributes: half, newton on
+      pair build: half/multi/newton
+      stencil: half/multi/2d/newton
+      bin: standard
+Per MPI rank memory allocation (min/avg/max) = 66.19 | 66.19 | 66.19 Mbytes
+Step Temp f_2[8] TotEng v_pebig v_ebig Press f_2[1] f_2[2] f_2[3] f_2[4] f_2[5] f_2[6] f_2[7] f_2[8] f_2[9] f_2[10] f_2[11] f_2[12] 
+       0    45.889956            0    4348.7507    719143.26    719147.47      1.60421            0            0            0            0            0            0            0            0            0            0            0            0 
+ERROR: Lost atoms: original 79377 current 79073 (src/thermo.cpp:438)
+Last command: run		100000

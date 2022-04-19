@@ -1,0 +1,38 @@
+LIGGGHTS (Version LIGGGHTS-PUBLIC 3.8.0, compiled 2022-04-02-19:54:59 by root, git commit unknown)
+# Pour granular particles into chute container, then induce flow
+
+atom_style	sphere #granular models setting
+boundary	fm fm fm  #sets x, y, z boundary conditions (p = periodic, f = non-periodic and fixed)
+newton		off #Newton's 3rd law on or off for walls and pair-pair interaction
+
+# parameters that affect the inter-processor communication of atom information that occurs each  timestep as coordinates and other properties are exchanged between neighboring processors and stored as properties of ghost atoms. vel = communicate velocity info with ghost atoms (yes or no follows)
+
+#comm_modify	vel yes
+
+
+# defines a geometric region of space. syntax: (regionID)  (style: block args = xlo xhi ylo yhi zlo zhi)  (units value = lattice or box; box = the geometry is defined in simulation box units)
+
+region		reg block -10 10 -10 10 -0.5 16 units box
+
+# creates a simulation box based on the specified region: syntax:  (#atoms in simulation)  (ID)
+create_box	1 reg
+Created orthogonal box = (-10 -10 -0.5) to (10 10 16)
+  1 by 1 by 1 MPI processor grid
+
+# parameters that affect the building of pairwise neighbor lists. Snyntax: (extra distance beyond force cutoff (distance units))  (bin or nsq or multi or multi/old: bin =  creates the list by binning which is an operation that scales linearly with N/P, the number of atoms per processor where N = total number of atoms and P = number of processors.)
+
+neighbor	0.2 bin
+
+#sets parameters that affect the building and use of pairwise neighbor lists. Syntax: (keyword: delay = never build new lists until at least N steps after the previous build. )  (N steps)
+
+neigh_modify	delay 0
+
+# IMPORTANT NOTE: these values of stiffness (2000) and timestep (0.001)
+# are used in this example file to produce a quick simulation and movie.
+# More appropriate values for realistic simulations would be
+# k = 2.0e5 and dt = 0.0001, as in bench/in.chute.
+
+# The type of particle-particle interaction. Style:  (Kind of interaction: gran = frictional force between particles, hooke = kind of particle-particle interaction (Hooke's law), history = takes into account the sheer force)  (elastic constant for normal particle repulsion)  (elastic constant for tangential contact)  (damping coefficient for collisions in normal direction)  (damping coefficient for collisions in tangential direction)
+
+pair_style      gran/hooke/history 2000.0 NULL 50.0 NULL 0.5 0
+ERROR: Invalid pair style (../force.cpp:247)

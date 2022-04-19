@@ -1,0 +1,37 @@
+This LAMMPS simulation made specific use of work described in the
+following references.  See http://lammps.sandia.gov/cite.html
+for details.
+
+pair gayberne command:
+
+@Article{Brown09,
+ author =  {W. M. Brown, M. K. Petersen, S. J. Plimpton, and G. S. Grest},
+ title =   {Liquid crystal nanodroplets in solution},
+ journal = {J.~Chem.~Phys.},
+ year =    2009,
+ volume =  130,
+ pages =   {044901}
+}
+
+neighbor multi command:
+
+@Article{Intveld08,
+ author =  {P.{\,}J.~in{\,}'t~Veld and S.{\,}J.~Plimpton and G.{\,}S.~Grest},
+ title =   {Accurate and Efficient Methods for Modeling Colloidal
+            Mixtures in an Explicit Solvent using Molecular Dynamics},
+ journal = {Comp.~Phys.~Comm.},
+ year =    2008,
+ volume =  179,
+ pages =   {320--329}
+}
+
+fix srd command:
+
+@Article{Petersen10,
+ author = {M. K. Petersen, J. B. Lechman, S. J. Plimpton, G. S. Grest, P. J. in 't Veld, P. R. Schunk},
+ title =   {Mesoscale Hydrodynamics via Stochastic Rotation Dynamics: Comparison with Lennard-Jones Fluid}, journal = {J.~Chem.~Phys.},
+ year =    2010,
+ volume =  132,
+ pages =   {174106}
+}
+

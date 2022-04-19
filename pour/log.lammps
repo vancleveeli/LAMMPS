@@ -1,0 +1,1208 @@
+LAMMPS (3 Mar 2020)
+OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (src/comm.cpp:94)
+  using 1 OpenMP thread(s) per MPI task
+# Pour granular particles into chute container, then induce flow
+
+atom_style	sphere #granular models setting
+boundary	fm fm fm  #sets x, y, z boundary conditions (p = periodic, f = non-periodic and fixed)
+newton		off #Newton's 3rd law on or off for walls and pair-pair interaction
+
+# parameters that affect the inter-processor communication of atom information that occurs each  timestep as coordinates and other properties are exchanged between neighboring processors and stored as properties of ghost atoms. vel = communicate velocity info with ghost atoms (yes or no follows)
+
+comm_modify	vel yes
+
+
+# defines a geometric region of space. syntax: (regionID)  (style: block args = xlo xhi ylo yhi zlo zhi)  (units value = lattice or box; box = the geometry is defined in simulation box units)
+
+region		reg block -10 10 -10 10 -0.5 16 units box
+
+# creates a simulation box based on the specified region: syntax:  (#atoms in simulation)  (ID)
+create_box	1 reg
+Created orthogonal box = (-10 -10 -0.5) to (10 10 16)
+  1 by 1 by 1 MPI processor grid
+
+# parameters that affect the building of pairwise neighbor lists. Snyntax: (extra distance beyond force cutoff (distance units))  (bin or nsq or multi or multi/old: bin =  creates the list by binning which is an operation that scales linearly with N/P, the number of atoms per processor where N = total number of atoms and P = number of processors.)
+
+neighbor	0.2 bin
+
+#sets parameters that affect the building and use of pairwise neighbor lists. Syntax: (keyword: delay = never build new lists until at least N steps after the previous build. )  (N steps)
+
+neigh_modify	delay 0
+
+# IMPORTANT NOTE: these values of stiffness (2000) and timestep (0.001)
+# are used in this example file to produce a quick simulation and movie.
+# More appropriate values for realistic simulations would be
+# k = 2.0e5 and dt = 0.0001, as in bench/in.chute.
+
+# The type of particle-particle interaction. Style:  (Kind of interaction: gran = frictional force between particles, hooke = kind of particle-particle interaction (Hooke's law), history = takes into account the sheer force)  (elastic constant for normal particle repulsion)  (elastic constant for tangential contact)  (damping coefficient for collisions in normal direction)  (damping coefficient for collisions in tangential direction)
+
+pair_style      gran/hooke/history 2000.0 NULL 50.0 NULL 0.5 0
+
+# For granular styles there are no additional coefficients to set for each pair of atom types via the pair_coeff command. All settings are global and are made via the pair_style command. However you must still use the pair_coeff for all pairs of granular atom types.
+
+pair_coeff	* *
+
+# Time step (dt = size of time step)
+
+timestep	0.00001
+
+# Set a fix that will be applied to a group of atoms.  (ID)  (group-ID)  (Style:nve/sphere =  Perform constant NVE integration to update position, velocity, and angular velocity for finite-size spherical particles in the group each timestep.)
+
+fix		1 all nve/sphere
+
+# Set a fix that will be applied to a group of atoms.  (ID)  (group-ID)  (Style: gravity = add gravity to particles (grain))  (size of acceleration (force/mass units))  (Style:  allows an arbitrary 3d direction to be specified for the acceleration vector.)  (phi angle of acceleration in Spherical coord (for -z = 0))  (theta angle of acceleration in Spherical coord (for -z = 180 or -180))
+
+fix		2 all gravity 1.0 spherical 0.0 -180.0
+
+# Set a fix that will be applied to a group of atoms.  (ID)  (group-ID) (Bound the simulation domain of a granular system with a frictional wall: wall/gran)  (style of force interactions between particles and wall: hooke/history = Hooke's law with sheer force)  (elastic constant for normal particle repulsion)  (elastic constant for tangential contact)  (damping coefficient for collisions in normal direction)  (damping coefficient for collisions in tangential direction)  (static yield criterion (unitless value between 0.0 and 1.0e4))  (0 or 1 if tangential damping force is excluded or included)  (wallstyle = xplane or yplane or zplane or zcylinder)  (position of lower plane (distance units), either can be NULL)  (position of upper plane (distance units), either can be NULL)
+
+fix		zlower all wall/gran hooke/history 2000.0 NULL 50.0 NULL 0.5 0 		zplane 0.0 2000.0
+
+fix		xsides all wall/gran hooke/history 2000.0 NULL 50.0 NULL 0.0 0 		xplane -10.0 10.0
+
+fix		ysides all wall/gran hooke/history 2000.0 NULL 50.0 NULL 0.0 0 		yplane -10.0 10.0
+
+
+
+
+#defines a geometric region of space. (ID)  (Style: block = cube )  (xlo)  (xhi)  (ylo)  (yhi)  (zlo)  (zhi) (units value = lattice or box; box = the geometry is defined in simulation box units)
+
+region		slab block -9.0 9.0 -9.0 9.0 10.0 15.0 units box
+
+#Set a fix that will be applied to a group of atoms.  (ID)  (group-ID)  (Style: pour =  pour new atoms/molecules into a granular simulation domain)  (# of particles to insert)  (type = atom type to assign to inserted particles)  (seed)  (keywrds: vol = specifies what volume fraction of the insertion volume will be filled with particles. )  (desired volume fraction for filling insertion volume)  (max # of insertion attempts per particle)
+
+fix		ins all pour 100 1 300719 vol 0.13 50 region slab
+Particle insertion: 402 every 316228 steps, 100 by step 1
+
+#particle insertion
+#fix             ins nve_group insert/stream seed 32452867 distributiontemplate pdd1 nparticles 6000 massrate 0.1 #insert_every 1000 overlapcheck yes all_in no vel constant 0.0 0.0 -1.0 insertion_face inface
+
+
+# Define a computation that will be performed on a group of atoms.   (ID)  (group-ID)  (style = erotate/sphere: rotational energy of spherical particles)
+
+compute		1 all erotate/sphere
+
+# Set the style and content for printing thermodynamic data  (style: custom allows you to specify which of the keywords listed above you want printed on each thermodynamic timestep. )  (keywords: atoms = # of atoms )  (keywords: ke = kinetic energy)  (keywords: c_ID = global scalar value calculated by a compute with ID)  (keywords: vol = volume)
+
+thermo_style	custom step atoms ke c_1 vol
+
+#Compute and print thermodynamic info  (output thermodynamics every N timesteps)
+
+thermo		1000
+
+#Set options for how thermodynamic information is computed and printed.  (keyword: lost = determines whether LAMMPS checks for lost atoms each time it computes thermodynamics and what it does if atoms are lost.)  (ignore = ignore the atom)  (determines whether various thermodynamic output values are normalized by the number of atoms or not)  (no = not normalized)
+
+thermo_modify	lost ignore norm no
+
+#Modify one or more parameters of a previously defined compute.  (compute ID)  (determines whether the number of atoms N in the compute group and their associated degrees of freedom are re-computed each time a temperature is computed.)  (Yes, they are recomputed)
+
+compute_modify	thermo_temp dynamic/dof yes
+
+#Dump a snapshot of atom quantities to one or more files every N timesteps in one of several styles.  (ID)  (group-ID)  (style = atom)  (dump every N timesteps = 1)  (file name for the data to be dumped into)
+
+dump		id all atom 100 dump.pour
+
+# Dump a snapshot of atom quantities to one or more files every N timesteps in one of several styles.  (ID)  (group-ID)  (style = image- generate image)  (dump every N timesteps = 1)  (file name for the data to be dumped into (set it in a image files with N in the name.)) (type = color)  (type)  (axes= determines if and how the coordinate axes are rendered as thin cylinders in the image) (yes, make axes)  (length of axes)  (diameter of axes)  (view = keyword determines the viewpoint from which the simulation box is viewed, looking towards the center point.)  (theta angle of view)  (phi angle of view)
+
+#insert the first particles so that dump is not empty
+#run    1
+#dump   dmp all custom/vtk 200 post/chute_*.vtk id type type x y z ix iy iz vx vy vz fx fy fz omegax omegay #omegaz radius
+#dump   dumpstress all mesh/gran/VTK 200 post/mesh_*.vtk stress wear cad
+
+
+#dump		2 all image 1000 image.*.jpg type type #		axes yes 0.8 0.02 view 80 -30
+#Modify the parameters of a previously defined dump command.  (ID)  (pad = # of characters to convert timestep to)  (# of characters to convert timestep to)
+
+#dump_modify	2 pad 5
+
+#dump		3 all movie 1000 movie.mpg type type #		axes yes 0.8 0.02 view 80 -30
+#dump_modify	3 pad 5
+
+#Run or continue dynamics for a specified number of timesteps.  (Number of time steps)
+
+run		1
+Neighbor list info ...
+  update every 1 steps, delay 0 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 1.2
+  ghost atom cutoff = 1.2
+  binsize = 0.6, bins = 34 34 28
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair gran/hooke/history, perpetual
+      attributes: half, newton off, size, history
+      pair build: half/size/bin/newtoff
+      stencil: half/bin/3d/newtoff
+      bin: standard
+Per MPI rank memory allocation (min/avg/max) = 5.94 | 5.94 | 5.94 Mbytes
+Step Atoms KinEng c_1 Volume 
+       0        0           -0            0         6600 
+       1      100    87.039786            0         6600 
+Loop time of 0.000750556 on 1 procs for 1 steps with 100 atoms
+
+Performance: 1151.147 tau/day, 1332.346 timesteps/s
+0.0% CPU use with 1 MPI tasks x 1 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 1.099e-06  | 1.099e-06  | 1.099e-06  |   0.0 |  0.15
+Neigh   | 0.00011189 | 0.00011189 | 0.00011189 |   0.0 | 14.91
+Comm    | 4.2e-06    | 4.2e-06    | 4.2e-06    |   0.0 |  0.56
+Output  | 3.3098e-05 | 3.3098e-05 | 3.3098e-05 |   0.0 |  4.41
+Modify  | 0.00058977 | 0.00058977 | 0.00058977 |   0.0 | 78.58
+Other   |            | 1.05e-05   |            |       |  1.40
+
+Nlocal:    100 ave 100 max 100 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    11 ave 11 max 11 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 11
+Ave neighs/atom = 0.11
+Neighbor list builds = 1
+Dangerous builds = 0
+
+# Delete a fix that was previously defined with a fix command.  (ID)
+
+unfix		ins
+
+# Set a fix that will be applied to a group of atoms.  (ID)  (group-ID)   (Style: gravity = add gravity to particles (grain))  (size of acceleration (force/mass units))  (Style: chute = typically used for simulations of chute flow where the specified angle is the chute angle, with flow occurring in the +x direction.)  (chute angle = 26 degrees)
+
+fix		2 all gravity 1.0 chute 0.0
+
+#Run or continue dynamics for a specified number of timesteps.  (Number of time steps)
+
+run		1000000
+Per MPI rank memory allocation (min/avg/max) = 11.25 | 11.25 | 11.25 Mbytes
+Step Atoms KinEng c_1 Volume 
+       1      100    87.039786            0         6600 
+    1000      100    87.870647            0         6600 
+    2000      100    88.707573            0         6600 
+    3000      100    89.549735            0         6600 
+    4000      100    90.397134            0         6600 
+    5000      100    91.249768            0         6600 
+    6000      100    92.107638            0         6600 
+    7000      100    92.970744            0         6600 
+    8000      100    93.839086            0         6600 
+    9000      100    94.712664            0         6600 
+   10000      100    95.591478            0         6600 
+   11000      100    96.475528            0         6600 
+   12000      100    97.364814            0         6600 
+   13000      100    98.259336            0         6600 
+   14000      100    99.159094            0         6600 
+   15000      100    100.06409            0         6600 
+   16000      100    100.97432            0         6600 
+   17000      100    101.88978            0         6600 
+   18000      100    102.81049            0         6600 
+   19000      100    103.73642            0         6600 
+   20000      100     104.6676            0         6600 
+   21000      100    105.60401            0         6600 
+   22000      100    106.54565            0         6600 
+   23000      100    107.49254            0         6600 
+   24000      100    108.44465            0         6600 
+   25000      100    109.40201            0         6600 
+   26000      100     110.3646            0         6600 
+   27000      100    111.33242            0         6600 
+   28000      100    112.30548            0         6600 
+   29000      100    113.28378            0         6600 
+   30000      100    114.26732            0         6600 
+   31000      100    115.25609            0         6600 
+   32000      100    116.25009            0         6600 
+   33000      100    117.24933            0         6600 
+   34000      100    118.25381            0         6600 
+   35000      100    119.26353            0         6600 
+   36000      100    120.27848            0         6600 
+   37000      100    121.29866            0         6600 
+   38000      100    122.32408            0         6600 
+   39000      100    123.35474            0         6600 
+   40000      100    124.39063            0         6600 
+   41000      100    125.43176            0         6600 
+   42000      100    126.47813            0         6600 
+   43000      100    127.52973            0         6600 
+   44000      100    128.58657            0         6600 
+   45000      100    129.64864            0         6600 
+   46000      100    130.71595            0         6600 
+   47000      100     131.7885            0         6600 
+   48000      100    132.86628            0         6600 
+   49000      100     133.9493            0         6600 
+   50000      100    135.03755            0         6600 
+   51000      100    136.13104            0         6600 
+   52000      100    137.22977            0         6600 
+   53000      100    138.33373            0         6600 
+   54000      100    139.44292            0         6600 
+   55000      100    140.55736            0         6600 
+   56000      100    141.67703            0         6600 
+   57000      100    142.80193            0         6600 
+   58000      100    143.93207            0         6600 
+   59000      100    145.06745            0         6600 
+   60000      100    146.20806            0         6600 
+   61000      100    147.35391            0         6600 
+   62000      100      148.505            0         6600 
+   63000      100    149.66132            0         6600 
+   64000      100    150.82288            0         6600 
+   65000      100    151.98967            0         6600 
+   66000      100     153.1617            0         6600 
+   67000      100    154.33897            0         6600 
+   68000      100    155.52147            0         6600 
+   69000      100    156.70921            0         6600 
+   70000      100    157.90218            0         6600 
+   71000      100    159.10039            0         6600 
+   72000      100    160.30383            0         6600 
+   73000      100    161.51251            0         6600 
+   74000      100    162.72643            0         6600 
+   75000      100    163.94558            0         6600 
+   76000      100    165.16997            0         6600 
+   77000      100     166.3996            0         6600 
+   78000      100    167.63446            0         6600 
+   79000      100    168.87456            0         6600 
+   80000      100    170.11989            0         6600 
+   81000      100    171.37046            0         6600 
+   82000      100    172.62627            0         6600 
+   83000      100    173.88731            0         6600 
+   84000      100    175.15358            0         6600 
+   85000      100     176.4251            0         6600 
+   86000      100    177.70185            0         6600 
+   87000      100    178.98383            0         6600 
+   88000      100    180.27105            0         6600 
+   89000      100    181.56351            0         6600 
+   90000      100     182.8612            0         6600 
+   91000      100    184.16413            0         6600 
+   92000      100     185.4723            0         6600 
+   93000      100     186.7857            0         6600 
+   94000      100    188.10433            0         6600 
+   95000      100    189.42821            0         6600 
+   96000      100    190.75732            0         6600 
+   97000      100    192.09166            0         6600 
+   98000      100    193.43124            0         6600 
+   99000      100    194.77606            0         6600 
+  100000      100    196.12611            0         6600 
+  101000      100     197.4814            0         6600 
+  102000      100    198.84193            0         6600 
+  103000      100    200.20769            0         6600 
+  104000      100    201.57868            0         6600 
+  105000      100    202.95492            0         6600 
+  106000      100    204.33639            0         6600 
+  107000      100    205.72309            0         6600 
+  108000      100    207.11503            0         6600 
+  109000      100    208.51221            0         6600 
+  110000      100    209.91462            0         6600 
+  111000      100    211.32227            0         6600 
+  112000      100    212.73515            0         6600 
+  113000      100    214.15328            0         6600 
+  114000      100    215.57663            0         6600 
+  115000      100    217.00523            0         6600 
+  116000      100    218.43905            0         6600 
+  117000      100    219.87812            0         6600 
+  118000      100    221.32242            0         6600 
+  119000      100    222.77196            0         6600 
+  120000      100    224.22673            0         6600 
+  121000      100    225.68674            0         6600 
+  122000      100    227.15198            0         6600 
+  123000      100    228.62246            0         6600 
+  124000      100    230.09818            0         6600 
+  125000      100    231.57913            0         6600 
+  126000      100    233.06532            0         6600 
+  127000      100    234.55675            0         6600 
+  128000      100    236.05341            0         6600 
+  129000      100     237.5553            0         6600 
+  130000      100    239.06244            0         6600 
+  131000      100     240.5748            0         6600 
+  132000      100    242.09241            0         6600 
+  133000      100    243.61525            0         6600 
+  134000      100    245.14333            0         6600 
+  135000      100    246.67664            0         6600 
+  136000      100    248.21519            0         6600 
+  137000      100    249.75897            0         6600 
+  138000      100    251.30799            0         6600 
+  139000      100    252.86225            0         6600 
+  140000      100    254.42174            0         6600 
+  141000      100    255.98647            0         6600 
+  142000      100    257.55643            0         6600 
+  143000      100    259.13163            0         6600 
+  144000      100    260.71207            0         6600 
+  145000      100    262.29774            0         6600 
+  146000      100    263.88865            0         6600 
+  147000      100    265.48479            0         6600 
+  148000      100    267.08618            0         6600 
+  149000      100    268.69279            0         6600 
+  150000      100    270.30464            0         6600 
+  151000      100    271.92173            0         6600 
+  152000      100    273.54406            0         6600 
+  153000      100    275.17162            0         6600 
+  154000      100    276.80441            0         6600 
+  155000      100    278.44245            0         6600 
+  156000      100    280.08571            0         6600 
+  157000      100    281.73422            0         6600 
+  158000      100    283.38796            0         6600 
+  159000      100    285.04693            0         6600 
+  160000      100    286.71115            0         6600 
+  161000      100    288.38059            0         6600 
+  162000      100    290.05528            0         6600 
+  163000      100     291.7352            0         6600 
+  164000      100    293.42036            0         6600 
+  165000      100    295.11075            0         6600 
+  166000      100    296.80638            0         6600 
+  167000      100    298.50724            0         6600 
+  168000      100    300.21334            0         6600 
+  169000      100    301.92468            0         6600 
+  170000      100    303.64125            0         6600 
+  171000      100    305.36306            0         6600 
+  172000      100     307.0901            0         6600 
+  173000      100    308.82238            0         6600 
+  174000      100     310.5599            0         6600 
+  175000      100    312.30265            0         6600 
+  176000      100    314.05064            0         6600 
+  177000      100    315.80386            0         6600 
+  178000      100    317.56232            0         6600 
+  179000      100    319.32602            0         6600 
+  180000      100    321.09495            0         6600 
+  181000      100    322.86912            0         6600 
+  182000      100    324.64852            0         6600 
+  183000      100    326.43316            0         6600 
+  184000      100    328.22304            0         6600 
+  185000      100    330.01815            0         6600 
+  186000      100     331.8185            0         6600 
+  187000      100    333.62408            0         6600 
+  188000      100     335.4349            0         6600 
+  189000      100    337.25096            0         6600 
+  190000      100    339.07225            0         6600 
+  191000      100    340.89878            0         6600 
+  192000      100    342.73054            0         6600 
+  193000      100    344.56754            0         6600 
+  194000      100    346.40977            0         6600 
+  195000      100    348.25725            0         6600 
+  196000      100    350.10995            0         6600 
+  197000      100     351.9679            0         6600 
+  198000      100    353.83108            0         6600 
+  199000      100    355.69949            0         6600 
+  200000      100    357.57315            0         6600 
+  201000      100    359.45203            0         6600 
+  202000      100    361.33616            0         6600 
+  203000      100    363.22552            0         6600 
+  204000      100    365.12011            0         6600 
+  205000      100    367.01994            0         6600 
+  206000      100    368.92501            0         6600 
+  207000      100    370.83531            0         6600 
+  208000      100    372.75085            0         6600 
+  209000      100    374.67163            0         6600 
+  210000      100    376.59764            0         6600 
+  211000      100    378.52889            0         6600 
+  212000      100    380.46537            0         6600 
+  213000      100    382.40709            0         6600 
+  214000      100    384.35405            0         6600 
+  215000      100    386.30624            0         6600 
+  216000      100    388.26367            0         6600 
+  217000      100    390.22633            0         6600 
+  218000      100    392.19423            0         6600 
+  219000      100    394.16737            0         6600 
+  220000      100    396.14574            0         6600 
+  221000      100    398.12934            0         6600 
+  222000      100    400.11819            0         6600 
+  223000      100    402.11227            0         6600 
+  224000      100    401.43795 1.5833368e-36         6600 
+  225000      100    393.14689 5.668805e-34         6600 
+  226000      100    392.88616 5.0008294e-33         6600 
+  227000      100    394.92137 1.5635944e-32         6600 
+  228000      100    392.23375 2.8087045e-32         6600 
+  229000      100    392.36555 3.5122778e-32         6600 
+  230000      100    394.55519 3.9308299e-32         6600 
+  231000      100     396.8262 4.5660322e-32         6600 
+  232000      100    398.45299 4.8323712e-32         6600 
+  233000      100     400.1928 4.7620143e-32         6600 
+  234000      100     402.1382 4.7620143e-32         6600 
+  235000      100    398.21625 4.7764972e-32         6600 
+  236000      100    398.39977 4.9576097e-32         6600 
+  237000      100    395.55637 5.4888104e-32         6600 
+  238000      100    395.64336 6.3270383e-32         6600 
+  239000      100    392.35506 7.1984244e-32         6600 
+  240000      100    384.78267  0.035728218         6600 
+  241000      100    383.04884   0.61467537         6600 
+  242000      100    385.39764    1.1931667         6600 
+  243000      100     387.5581    1.0881988         6600 
+  244000      100    388.93955    1.0881988         6600 
+  245000      100    390.46055    1.0881988         6600 
+  246000      100    392.32706    1.0881988         6600 
+  247000      100    394.19881    1.0881988         6600 
+  248000      100     396.0758    1.0881988         6600 
+  249000      100    393.58007    1.0881988         6600 
+  250000      100    388.93728    1.0881988         6600 
+  251000      100    386.85534    1.0339522         6600 
+  252000      100    388.60544   0.73952183         6600 
+  253000      100    390.91328   0.59462088         6600 
+  254000      100    392.10008   0.55695924         6600 
+  255000      100    386.26919   0.55230182         6600 
+  256000      100    381.34633   0.54613164         6600 
+  257000      100    382.65881    0.5452064         6600 
+  258000      100    385.51957    0.5452064         6600 
+  259000      100    387.15639    0.5452064         6600 
+  260000      100    382.55626    0.5452064         6600 
+  261000      100    382.53106    0.5452064         6600 
+  262000      100    384.85262    0.5452064         6600 
+  263000      100    387.05607    0.5452064         6600 
+  264000      100    382.87018    0.5452064         6600 
+  265000      100     382.4657    0.5452064         6600 
+  266000      100    384.70564    0.5452064         6600 
+  267000      100    380.75322   0.50897495         6600 
+  268000      100    373.70009   0.40613033         6600 
+  269000      100    372.97877   0.28930806         6600 
+  270000      100     375.8583   0.20726742         6600 
+  271000      100    378.00893   0.21676407         6600 
+  272000      100    379.04429   0.24955315         6600 
+  273000      100     380.3819   0.24955315         6600 
+  274000      100    382.08249   0.24955315         6600 
+  275000      100    383.78831   0.24955315         6600 
+  276000      100    385.49938   0.24955315         6600 
+  277000      100    387.21567   0.24955315         6600 
+  278000      100    388.93721   0.24955315         6600 
+  279000      100    390.66398   0.24955315         6600 
+  280000      100    392.39598   0.24955315         6600 
+  281000      100    387.09632   0.24955315         6600 
+  282000      100    380.05039   0.25216908         6600 
+  283000      100    378.87435   0.44929418         6600 
+  284000      100    375.43156    1.1349585         6600 
+  285000      100    368.69413    1.2158076         6600 
+  286000      100    363.24852    1.1473342         6600 
+  287000      100    364.49611    1.1473342         6600 
+  288000      100    366.92608    1.1473342         6600 
+  289000      100    368.25664    1.1473342         6600 
+  290000      100    369.37542    1.1473342         6600 
+  291000      100    370.76059    1.1473342         6600 
+  292000      100    372.37829    1.1473342         6600 
+  293000      100    374.00122    1.1473342         6600 
+  294000      100    375.62939    1.1473342         6600 
+  295000      100    377.26279    1.1473342         6600 
+  296000      100    372.48168    1.0552433         6600 
+  297000      100    368.29043   0.77066681         6600 
+  298000      100    363.22118   0.69990271         6600 
+  299000      100    360.83223   0.72929001         6600 
+  300000      100    362.44408   0.73291226         6600 
+  301000      100    364.44555   0.72787165         6600 
+  302000      100    361.69962   0.72787165         6600 
+  303000      100    359.32259   0.72788546         6600 
+  304000      100    359.09903   0.86609385         6600 
+  305000      100    360.54121    1.2968283         6600 
+  306000      100    361.99639     1.418667         6600 
+  307000      100    363.03974     1.434486         6600 
+  308000      100    359.49269     1.434486         6600 
+  309000      100    358.56025     1.434486         6600 
+  310000      100    360.40447     1.434486         6600 
+  311000      100    362.50087     1.434486         6600 
+  312000      100    363.90866     1.434486         6600 
+  313000      100    365.09124     1.434486         6600 
+  314000      100    360.63317     1.434486         6600 
+  315000      100    354.53052     1.434486         6600 
+  316000      100    354.91668     1.434486         6600 
+  317000      100    357.43094     1.434486         6600 
+  318000      100    359.13737     1.434486         6600 
+  319000      100    360.10245     1.434486         6600 
+  320000      100    361.34367     1.434486         6600 
+  321000      100     358.7725     1.434486         6600 
+  322000      100    356.96309    1.4343506         6600 
+  323000      100    358.40448    1.4336963         6600 
+  324000      100    360.52005    1.4393253         6600 
+  325000      100    359.15685    1.4265697         6600 
+  326000      100    358.82312    1.3617426         6600 
+  327000      100    360.54413     1.281747         6600 
+  328000      100    361.43882    1.2048164         6600 
+  329000      100    359.97231    1.1296559         6600 
+  330000      100     356.7859    1.0608809         6600 
+  331000      100    357.78903   0.98684594         6600 
+  332000      100    359.91809   0.98315038         6600 
+  333000      100    358.54805    1.0138532         6600 
+  334000      100    355.22534    1.0138532         6600 
+  335000      100    350.32077    1.0138532         6600 
+  336000      100      350.829    1.0138532         6600 
+  337000      100    352.94528    1.0138532         6600 
+  338000      100    354.38797    1.0138532         6600 
+  339000      100    355.47223    1.0138532         6600 
+  340000      100    356.63409    1.0138532         6600 
+  341000      100    358.05774    1.0140653         6600 
+  342000      100    357.86412    1.0155344         6600 
+  343000      100    353.84013    1.0369451         6600 
+  344000      100    354.05544    1.0659102         6600 
+  345000      100    352.41278    1.0906186         6600 
+  346000      100     353.7451    1.2075024         6600 
+  347000      100    349.45926    1.3862887         6600 
+  348000      100    348.72384    1.3384785         6600 
+  349000      100    348.06295    1.3378078         6600 
+  350000      100    345.52932    1.3368233         6600 
+  351000      100    346.11121    1.3355815         6600 
+  352000      100    345.24424    1.3342442         6600 
+  353000      100    342.00162    1.3319954         6600 
+  354000      100     339.9092     1.356756         6600 
+  355000      100    335.83517    1.7394305         6600 
+  356000      100    334.18031    1.9771358         6600 
+  357000      100    326.68158    1.8872532         6600 
+  358000      100    322.10642    1.8828498         6600 
+  359000      100    318.94275    1.8717938         6600 
+  360000      100    318.64103    1.7393601         6600 
+  361000      100    317.97145     1.648243         6600 
+  362000      100    314.07744    1.7475219         6600 
+  363000      100    313.96714    1.7694021         6600 
+  364000      100     314.6193    1.5452691         6600 
+  365000      100    313.65225    1.4128428         6600 
+  366000      100    314.01518    1.5278016         6600 
+  367000      100    315.15228    1.6368272         6600 
+  368000      100    316.40184    1.6707406         6600 
+  369000      100    313.40779    1.6323778         6600 
+  370000      100    311.23783    1.6120667         6600 
+  371000      100    312.40051     1.612965         6600 
+  372000      100    314.23245    1.6146938         6600 
+  373000      100    315.42631    1.6162629         6600 
+  374000      100    312.62461    1.6144104         6600 
+  375000      100    308.49257    1.9039012         6600 
+  376000      100    300.06021    2.5464828         6600 
+  377000      100    293.54868     2.565307         6600 
+  378000      100    287.66123    2.5400579         6600 
+  379000      100    286.12785     2.541076         6600 
+  380000      100    283.04746    2.5418391         6600 
+  381000      100    283.31763    2.5422115         6600 
+  382000      100    284.37621    2.5423374         6600 
+  383000      100    284.57053    2.5350246         6600 
+  384000      100    276.45742    2.5124509         6600 
+  385000      100    275.26884    3.0988614         6600 
+  386000      100    277.00663    3.3748768         6600 
+  387000      100    278.36574    3.2577345         6600 
+  388000      100     279.1784    3.2599275         6600 
+  389000      100    279.96538    3.2617965         6600 
+  390000      100    281.02717    3.2630469         6600 
+  391000      100    282.09476    3.2636373         6600 
+  392000      100    283.16812    3.2636292         6600 
+  393000      100    284.24723    3.2630418         6600 
+  394000      100    285.33185     3.262064         6600 
+  395000      100     280.4007    3.2597795         6600 
+  396000      100    266.61657    3.2122501         6600 
+  397000      100    250.33513     3.168368         6600 
+  398000      100    244.87202     3.213732         6600 
+  399000      100    245.80814    3.2642546         6600 
+  400000      100     247.2274    3.2376811         6600 
+  401000      100    241.53423     3.205993         6600 
+  402000      100    238.98274    3.0614769         6600 
+  403000      100    239.89573    2.8411365         6600 
+  404000      100    240.58556    2.6368589         6600 
+  405000      100    238.88866    2.4513009         6600 
+  406000      100    233.85513    2.5189174         6600 
+  407000      100    233.62947    2.6575527         6600 
+  408000      100    234.52495     2.670022         6600 
+  409000      100    229.61476    2.5584431         6600 
+  410000      100    228.53108    2.5771736         6600 
+  411000      100    229.73743    2.6011468         6600 
+  412000      100    230.92841    2.6001592         6600 
+  413000      100     231.2714    2.6004025         6600 
+  414000      100    224.96313     2.708014         6600 
+  415000      100    219.38126     2.751509         6600 
+  416000      100    217.52333    2.8705196         6600 
+  417000      100    214.54058    2.8702974         6600 
+  418000      100    214.57798    2.7901684         6600 
+  419000      100    210.38418    2.8156156         6600 
+  420000      100     208.5926    2.8712663         6600 
+  421000      100    205.60967    2.9236723         6600 
+  422000      100    203.05503    2.9656601         6600 
+  423000      100    200.58197    2.9142518         6600 
+  424000      100    197.84569     2.645118         6600 
+  425000      100     198.1049    2.5036978         6600 
+  426000      100    198.89668    2.4659794         6600 
+  427000      100    199.55063    2.4607251         6600 
+  428000      100    195.01469    2.4939541         6600 
+  429000      100    193.64498    3.0677354         6600 
+  430000      100    189.82612    3.6899446         6600 
+  431000      100    185.05763    3.8491363         6600 
+  432000      100     185.1536    4.0661835         6600 
+  433000      100    186.60105    4.1904233         6600 
+  434000      100    187.33582    4.2034566         6600 
+  435000      100    187.42588    4.1832861         6600 
+  436000      100    187.58856    4.2019908         6600 
+  437000      100     187.9575    4.2375951         6600 
+  438000      100    182.74908    4.2518362         6600 
+  439000      100    181.52775    4.2523957         6600 
+  440000      100    182.65139    4.2536426         6600 
+  441000      100    180.46033    4.2458873         6600 
+  442000      100    179.81216    4.2170055         6600 
+  443000      100    175.09669    4.3404781         6600 
+  444000      100    173.46168    4.2832372         6600 
+  445000      100    174.15104    4.2820988         6600 
+  446000      100    174.39692    4.4393767         6600 
+  447000      100     174.5813    4.6290439         6600 
+  448000      100     172.8739    4.7140516         6600 
+  449000      100     172.5942    5.2117255         6600 
+  450000      100    169.24474    5.5755866         6600 
+  451000      100    166.12221    5.4078598         6600 
+  452000      100     166.4518    5.1781957         6600 
+  453000      100     162.2715    4.9680071         6600 
+  454000      100    161.02247    4.9038134         6600 
+  455000      100    159.75047    4.8690273         6600 
+  456000      100    159.64124    4.7984462         6600 
+  457000      100    160.05207    4.8083009         6600 
+  458000      100    160.52467    4.8925973         6600 
+  459000      100    161.00544    4.8688526         6600 
+  460000      100    161.42724    4.8083115         6600 
+  461000      100    161.25176    4.8042917         6600 
+  462000      100    160.06932    4.7424114         6600 
+  463000      100    159.33374    4.6664313         6600 
+  464000      100    157.41489    4.4439046         6600 
+  465000      100    158.29328    4.2055365         6600 
+  466000      100    158.77684    4.0695351         6600 
+  467000      100     158.4983    4.0584589         6600 
+  468000      100    157.83847    4.1595665         6600 
+  469000      100    156.75251    4.1265414         6600 
+  470000      100    157.50647    4.2048991         6600 
+  471000      100      158.144    4.2814125         6600 
+  472000      100    158.65198    4.2592621         6600 
+  473000      100    159.04815    4.2631752         6600 
+  474000      100    155.13769    4.3083054         6600 
+  475000      100    153.40741    4.6251421         6600 
+  476000      100    154.20009    4.7502606         6600 
+  477000      100    151.59378    4.6439029         6600 
+  478000      100    144.44034    4.6280653         6600 
+  479000      100    141.95426    4.6315102         6600 
+  480000      100    143.31254    4.6250043         6600 
+  481000      100    144.47385     4.626981         6600 
+  482000      100    144.55719    4.6354492         6600 
+  483000      100    142.64158     4.527827         6600 
+  484000      100    140.42807    4.1243577         6600 
+  485000      100    140.53554    3.9814855         6600 
+  486000      100    141.22999    4.1013237         6600 
+  487000      100    138.93139    4.1081596         6600 
+  488000      100    131.63473    4.0188673         6600 
+  489000      100    126.99988     3.781436         6600 
+  490000      100    121.15768     3.902672         6600 
+  491000      100    120.41627    4.3492181         6600 
+  492000      100    120.55071    4.5486157         6600 
+  493000      100    119.98651     4.659776         6600 
+  494000      100    119.31286    4.7909009         6600 
+  495000      100    118.49577    4.9782978         6600 
+  496000      100     117.4966    5.0659441         6600 
+  497000      100     111.9702    5.0144178         6600 
+  498000      100     108.4549    5.0090915         6600 
+  499000      100    107.18152    4.8842452         6600 
+  500000      100    106.95334    5.0968459         6600 
+  501000      100    106.42571    5.5978226         6600 
+  502000      100    103.25434    5.7535483         6600 
+  503000      100    101.93964    5.6380142         6600 
+  504000      100    101.84959     5.513002         6600 
+  505000      100    100.73794    5.1475691         6600 
+  506000      100    100.00962    5.0003233         6600 
+  507000      100    94.486481    5.0744018         6600 
+  508000      100    85.609297    5.1037823         6600 
+  509000      100    78.130047    5.2082517         6600 
+  510000      100     76.99473    5.2797975         6600 
+  511000      100     77.49546    5.2769057         6600 
+  512000      100    77.589939      5.23379         6600 
+  513000      100    77.301988    5.2159145         6600 
+  514000      100    77.103474    5.2030337         6600 
+  515000      100     71.85264    5.3532889         6600 
+  516000      100    68.930688    5.5362465         6600 
+  517000      100     67.01897    5.5701397         6600 
+  518000      100    56.306105    5.5234157         6600 
+  519000      100    46.888787    5.4658223         6600 
+  520000      100    43.397378    5.4277463         6600 
+  521000      100    43.810966    5.4136916         6600 
+  522000      100    42.659593    5.3813159         6600 
+  523000      100    40.716867    5.2818154         6600 
+  524000      100    40.253141    5.2440933         6600 
+  525000      100    40.257417    5.2940609         6600 
+  526000      100    39.598567    5.3485545         6600 
+  527000      100    37.654619    5.3742328         6600 
+  528000      100    34.400246    5.3835022         6600 
+  529000      100    34.150172    5.2584566         6600 
+  530000      100    34.592647    5.1203701         6600 
+  531000      100    34.343448    5.0041629         6600 
+  532000      100    33.883605    4.9336688         6600 
+  533000      100    33.507068    4.8165841         6600 
+  534000      100    32.995568    4.6915895         6600 
+  535000      100    32.231208    4.4958979         6600 
+  536000      100    31.119906    4.3524741         6600 
+  537000      100     26.42382    4.1728079         6600 
+  538000      100    19.717617    4.1067123         6600 
+  539000      100    16.249434    4.0901145         6600 
+  540000      100    16.701244     4.024899         6600 
+  541000      100    17.331865    3.9693289         6600 
+  542000      100    17.013779    3.9630659         6600 
+  543000      100    16.529053    3.9628877         6600 
+  544000      100    16.455448    3.8892867         6600 
+  545000      100    16.476118    3.8508903         6600 
+  546000      100    16.490439    3.8458845         6600 
+  547000      100    16.497761    3.8449094         6600 
+  548000      100     16.51828    3.8411403         6600 
+  549000      100    15.876365     3.810171         6600 
+  550000      100    15.577671    3.7221075         6600 
+  551000      100    15.725227    3.6193197         6600 
+  552000      100    15.702377    3.5434991         6600 
+  553000      100    15.499084    3.5412886         6600 
+  554000      100    15.421534    3.5712918         6600 
+  555000      100    15.407327    3.5683036         6600 
+  556000      100     15.12598    3.5605791         6600 
+  557000      100    14.457433    3.5240229         6600 
+  558000      100    14.115311    3.4693176         6600 
+  559000      100    14.119892    3.4136674         6600 
+  560000      100    14.166768     3.357498         6600 
+  561000      100    14.187272     3.327377         6600 
+  562000      100    14.127365    3.3271917         6600 
+  563000      100    13.930663    3.3289586         6600 
+  564000      100    13.842648    3.3150957         6600 
+  565000      100    13.857906    3.3263845         6600 
+  566000      100    13.750013    3.3327779         6600 
+  567000      100    13.248474    3.3109228         6600 
+  568000      100    12.916701    3.2720627         6600 
+  569000      100    12.882915    3.2600136         6600 
+  570000      100    12.923658    3.2585307         6600 
+  571000      100    12.974863    3.2567047         6600 
+  572000      100    13.003948    3.2565729         6600 
+  573000      100    12.666218    3.2615564         6600 
+  574000      100    12.430845    3.2695943         6600 
+  575000      100    12.078189    3.2120981         6600 
+  576000      100    12.089177    3.2090852         6600 
+  577000      100     11.99776    3.2250581         6600 
+  578000      100    11.853095    3.2456119         6600 
+  579000      100    11.569989    3.2597083         6600 
+  580000      100    11.530083    3.2275098         6600 
+  581000      100    11.616996      3.21243         6600 
+  582000      100    11.695144     3.205421         6600 
+  583000      100    11.723052    3.2018863         6600 
+  584000      100    11.612221    3.2007371         6600 
+  585000      100    11.229427    3.2054473         6600 
+  586000      100    10.991619     3.212434         6600 
+  587000      100    11.061191     3.217118         6600 
+  588000      100    11.150832    3.2197941         6600 
+  589000      100    11.179657    3.2219206         6600 
+  590000      100    11.207528    3.2244125         6600 
+  591000      100    11.260742     3.224381         6600 
+  592000      100    11.279615     3.222013         6600 
+  593000      100    11.346818    3.2156642         6600 
+  594000      100    11.423016    3.2080992         6600 
+  595000      100    11.472841    3.2059958         6600 
+  596000      100    11.540853    3.2125037         6600 
+  597000      100    11.581656    3.2171399         6600 
+  598000      100    11.612373    3.2193834         6600 
+  599000      100    11.624699    3.2330525         6600 
+  600000      100    11.666463    3.2544952         6600 
+  601000      100    11.766358    3.2598522         6600 
+  602000      100    11.869131    3.2539288         6600 
+  603000      100    11.961798    3.2484867         6600 
+  604000      100    11.382364    3.2293949         6600 
+  605000      100    10.841314    3.1286594         6600 
+  606000      100    10.892614    3.0451698         6600 
+  607000      100     10.98654    3.0335892         6600 
+  608000      100    10.916239    3.0375603         6600 
+  609000      100    10.808932    3.0176484         6600 
+  610000      100    10.882902    3.0091448         6600 
+  611000      100    11.021369    3.0236366         6600 
+  612000      100    10.998935    3.0051625         6600 
+  613000      100    10.630887    2.9312342         6600 
+  614000      100    10.440019    2.9080243         6600 
+  615000      100    10.539188    2.9029704         6600 
+  616000      100    10.697758    2.8940899         6600 
+  617000      100      10.6294    2.8937577         6600 
+  618000      100     10.27993    2.8605535         6600 
+  619000      100    10.184728    2.8423378         6600 
+  620000      100    9.9635701    2.8098444         6600 
+  621000      100     9.800981    2.7895943         6600 
+  622000      100    9.8062429    2.7766494         6600 
+  623000      100    9.5210829    2.7761324         6600 
+  624000      100    9.3369271    2.7900825         6600 
+  625000      100    9.1127647    2.7002383         6600 
+  626000      100    8.9173428    2.6183528         6600 
+  627000      100    8.7822301    2.5932618         6600 
+  628000      100    8.6814915    2.5941102         6600 
+  629000      100    8.7337511    2.5859313         6600 
+  630000      100    8.8641315    2.5818234         6600 
+  631000      100    8.9696625    2.5783706         6600 
+  632000      100    8.8579945    2.5546521         6600 
+  633000      100    8.8640908    2.5256691         6600 
+  634000      100    8.9603886     2.515988         6600 
+  635000      100    8.7190312    2.5057196         6600 
+  636000      100     8.655749     2.499415         6600 
+  637000      100    8.7133598    2.5236953         6600 
+  638000      100    8.8042565    2.5429596         6600 
+  639000      100    8.8886781     2.535127         6600 
+  640000      100    8.9691659    2.5228965         6600 
+  641000      100    9.0552571    2.5164626         6600 
+  642000      100    9.0875458    2.4648848         6600 
+  643000      100    8.9158423    2.4286937         6600 
+  644000      100    8.9253598    2.4148198         6600 
+  645000      100    9.0497947    2.4142522         6600 
+  646000      100    8.6897307    2.4218554         6600 
+  647000      100    8.3765559    2.4197418         6600 
+  648000      100    8.4517152    2.4179825         6600 
+  649000      100    8.6276357    2.4190477         6600 
+  650000      100    8.5649412    2.4181139         6600 
+  651000      100    8.4707375    2.4241838         6600 
+  652000      100    8.5193194    2.4589866         6600 
+  653000      100    8.5192617    2.4845664         6600 
+  654000      100    8.4247297     2.476184         6600 
+  655000      100    8.2548715    2.4526987         6600 
+  656000      100    8.3080633    2.4171321         6600 
+  657000      100    8.4673613    2.4013739         6600 
+  658000      100    8.5910566    2.3952143         6600 
+  659000      100    8.6761763    2.3906403         6600 
+  660000      100    8.5289349    2.3823983         6600 
+  661000      100    8.3856016    2.3656222         6600 
+  662000      100    8.4470404    2.3596177         6600 
+  663000      100    8.5803358    2.3780363         6600 
+  664000      100    8.6888724    2.3905602         6600 
+  665000      100    8.7683165    2.3898945         6600 
+  666000      100    8.8300566    2.3883928         6600 
+  667000      100    8.3772453    2.3864044         6600 
+  668000      100     8.090852    2.3838824         6600 
+  669000      100    7.8419483    2.3770196         6600 
+  670000      100    7.8932108    2.3570713         6600 
+  671000      100     7.926487    2.3412398         6600 
+  672000      100    7.4786166    2.3274466         6600 
+  673000      100    7.3306261    2.3210569         6600 
+  674000      100    7.4402644    2.3276175         6600 
+  675000      100    7.5663709    2.3411612         6600 
+  676000      100    7.3546801    2.3447998         6600 
+  677000      100    7.1389067    2.3360201         6600 
+  678000      100    7.1798584    2.3290999         6600 
+  679000      100    7.2077585    2.3272143         6600 
+  680000      100    7.2589794    2.3279616         6600 
+  681000      100    7.3158623    2.3319243         6600 
+  682000      100    7.3861266     2.336074         6600 
+  683000      100    7.4565216    2.3317465         6600 
+  684000      100    7.4461523    2.3288998         6600 
+  685000      100    7.2108436    2.3300198         6600 
+  686000      100    7.1999146    2.3305463         6600 
+  687000      100    7.0508331    2.3324602         6600 
+  688000      100     6.948918    2.3349982         6600 
+  689000      100    6.9329479    2.3364267         6600 
+  690000      100    6.7107864    2.3354478         6600 
+  691000      100     6.704487    2.3325767         6600 
+  692000      100    6.4113301    2.3283608         6600 
+  693000      100    6.1607074    2.2828504         6600 
+  694000      100    6.1551979      2.24787         6600 
+  695000      100    6.2103774    2.2468546         6600 
+  696000      100    6.2053654    2.2285305         6600 
+  697000      100    6.2265271    2.2150854         6600 
+  698000      100    6.2809441    2.2037171         6600 
+  699000      100    6.3474445    2.2011744         6600 
+  700000      100    6.4164831    2.2010926         6600 
+  701000      100    6.4899051     2.198482         6600 
+  702000      100    6.5620638    2.1932934         6600 
+  703000      100    6.6330006    2.1853049         6600 
+  704000      100    6.7099228    2.1712628         6600 
+  705000      100     6.802651    2.1547442         6600 
+  706000      100    6.8951417    2.1453172         6600 
+  707000      100    6.9778298     2.146043         6600 
+  708000      100    7.0572853    2.1510501         6600 
+  709000      100    7.1396469     2.155402         6600 
+  710000      100    7.1343338    2.1556821         6600 
+  711000      100    7.0385337    2.1636517         6600 
+  712000      100    7.0710485    2.1865683         6600 
+  713000      100    6.9470009    2.2187285         6600 
+  714000      100    6.1999676    2.2302864         6600 
+  715000      100    5.7537368    2.1746596         6600 
+  716000      100    5.7497823    2.1653975         6600 
+  717000      100    5.8264633    2.1964939         6600 
+  718000      100    5.8461139    2.1927313         6600 
+  719000      100     5.869638    2.1787233         6600 
+  720000      100    5.9275962    2.1733429         6600 
+  721000      100    5.9203956       2.1695         6600 
+  722000      100    5.7838838    2.1466961         6600 
+  723000      100    5.8277477     2.111749         6600 
+  724000      100    5.9494179    2.0877362         6600 
+  725000      100    6.0403118    2.0839924         6600 
+  726000      100     6.083194    2.0896982         6600 
+  727000      100     6.132108    2.0975122         6600 
+  728000      100    6.1973955    2.1027302         6600 
+  729000      100    6.2675846     2.104607         6600 
+  730000      100    6.3394576    2.1041996         6600 
+  731000      100    6.4062122    2.0998077         6600 
+  732000      100    6.4281183    2.0973465         6600 
+  733000      100    6.2641811    2.1128127         6600 
+  734000      100    6.1560354    2.1231783         6600 
+  735000      100    6.1467579    2.1241146         6600 
+  736000      100    6.0275413     2.126342         6600 
+  737000      100    5.9065187    2.1190644         6600 
+  738000      100    5.4827952    2.0725336         6600 
+  739000      100    5.2013086    2.0227967         6600 
+  740000      100    5.1862047    2.0110638         6600 
+  741000      100    5.2128172    1.9755183         6600 
+  742000      100    5.2557866    1.9345295         6600 
+  743000      100    5.3250426    1.9166786         6600 
+  744000      100    5.3345724    1.8655514         6600 
+  745000      100    5.3670616    1.8279278         6600 
+  746000      100    5.4198217    1.8187831         6600 
+  747000      100    5.4492152    1.8099468         6600 
+  748000      100    5.4512989    1.7965565         6600 
+  749000      100    5.4198593    1.7824924         6600 
+  750000      100    5.3731696    1.7697991         6600 
+  751000      100    5.4103198    1.7597243         6600 
+  752000      100    5.4823382    1.7586362         6600 
+  753000      100    5.5163437    1.7523397         6600 
+  754000      100    5.5567548    1.7449247         6600 
+  755000      100     5.588329    1.7400705         6600 
+  756000      100     5.546377    1.7286036         6600 
+  757000      100    5.5473942    1.7316872         6600 
+  758000      100    5.4300654    1.7344216         6600 
+  759000      100    5.1639285    1.7364623         6600 
+  760000      100    4.8932194    1.7223391         6600 
+  761000      100    4.6254659    1.7061775         6600 
+  762000      100    4.5184891     1.689541         6600 
+  763000      100    4.5541728    1.6776374         6600 
+  764000      100    4.6087852     1.671484         6600 
+  765000      100      4.63476     1.656089         6600 
+  766000      100    4.6694883    1.6400205         6600 
+  767000      100    4.7091481    1.6368536         6600 
+  768000      100    4.7449786    1.6413324         6600 
+  769000      100    4.7807013    1.6476614         6600 
+  770000      100    4.8219793    1.6508351         6600 
+  771000      100    4.8519102    1.6467396         6600 
+  772000      100    4.8537465    1.6229259         6600 
+  773000      100    4.8704101    1.6103614         6600 
+  774000      100     4.887925    1.6046991         6600 
+  775000      100    4.9221596    1.6034928         6600 
+  776000      100    4.9685029    1.6031142         6600 
+  777000      100    5.0187269    1.6039229         6600 
+  778000      100    4.9231929    1.6095678         6600 
+  779000      100      4.67855    1.6176386         6600 
+  780000      100    4.6732841    1.6233267         6600 
+  781000      100    4.7564879    1.6266157         6600 
+  782000      100    4.7969546    1.6271727         6600 
+  783000      100    4.8160707    1.6254368         6600 
+  784000      100    4.8428432    1.6228872         6600 
+  785000      100    4.8344028    1.6166246         6600 
+  786000      100    4.5129017    1.6168257         6600 
+  787000      100    4.4458838     1.620866         6600 
+  788000      100    4.2559452    1.6239835         6600 
+  789000      100    4.1071175    1.6265207         6600 
+  790000      100    3.8118733    1.6295473         6600 
+  791000      100     3.695057     1.633878         6600 
+  792000      100    3.7293233    1.6371741         6600 
+  793000      100    3.5300922    1.6392235         6600 
+  794000      100    3.4024045    1.6413885         6600 
+  795000      100    3.3986215    1.6463756         6600 
+  796000      100    3.4424451    1.6491183         6600 
+  797000      100    3.4576756    1.6482369         6600 
+  798000      100    3.4402146    1.6448716         6600 
+  799000      100    3.4506494    1.6422099         6600 
+  800000      100    3.4699883    1.6389237         6600 
+  801000      100     3.490694      1.63681         6600 
+  802000      100    3.5087908    1.6365411         6600 
+  803000      100    3.5194201    1.6375383         6600 
+  804000      100    3.5254382    1.6376014         6600 
+  805000      100    3.4863819    1.6373654         6600 
+  806000      100    3.3473256    1.6346066         6600 
+  807000      100    3.3361365    1.6312345         6600 
+  808000      100    3.3734281    1.6301692         6600 
+  809000      100    3.0616095    1.6307084         6600 
+  810000      100    2.9325749     1.632745         6600 
+  811000      100     2.956917    1.6326763         6600 
+  812000      100    2.9981021     1.631784         6600 
+  813000      100    2.9991658    1.6314118         6600 
+  814000      100    2.9900234    1.6306143         6600 
+  815000      100    3.0014442     1.629512         6600 
+  816000      100    3.0068045    1.6260279         6600 
+  817000      100    3.0103065    1.6212273         6600 
+  818000      100    2.8496922     1.616439         6600 
+  819000      100    2.7935455    1.6121006         6600 
+  820000      100    2.8158507    1.6093156         6600 
+  821000      100    2.8409662    1.6083068         6600 
+  822000      100    2.8292179      1.60207         6600 
+  823000      100    2.8172379     1.594787         6600 
+  824000      100    2.8282881    1.5925551         6600 
+  825000      100    2.8385664    1.5910386         6600 
+  826000      100    2.8499019    1.5900563         6600 
+  827000      100    2.8410976    1.5900286         6600 
+  828000      100    2.8353435     1.590741         6600 
+  829000      100    2.8269178    1.5923852         6600 
+  830000      100     2.832492    1.5942947         6600 
+  831000      100    2.8427495    1.5955592         6600 
+  832000      100    2.8368852    1.5930495         6600 
+  833000      100    2.8387732    1.5851513         6600 
+  834000      100    2.6456781     1.559907         6600 
+  835000      100    2.5701272    1.4965259         6600 
+  836000      100    2.6226548    1.4452295         6600 
+  837000      100    2.6741899    1.4309131         6600 
+  838000      100    2.6755765    1.4297664         6600 
+  839000      100    2.6564833      1.43439         6600 
+  840000      100    2.6628603    1.4351174         6600 
+  841000      100    2.6695716    1.4362446         6600 
+  842000      100    2.6772381    1.4369235         6600 
+  843000      100    2.6861213    1.4369549         6600 
+  844000      100    2.6961081    1.4365055         6600 
+  845000      100    2.7060283     1.435907         6600 
+  846000      100    2.7163779    1.4354956         6600 
+  847000      100    2.7058719    1.4355063         6600 
+  848000      100    2.7087836    1.4360065         6600 
+  849000      100    2.7199302    1.4368516         6600 
+  850000      100    2.7312487    1.4377557         6600 
+  851000      100    2.7402687    1.4380087         6600 
+  852000      100    2.7428873    1.4375606         6600 
+  853000      100    2.7437225    1.4369023         6600 
+  854000      100     2.737417    1.4364645         6600 
+  855000      100    2.7354832     1.436457         6600 
+  856000      100    2.7055061    1.4363833         6600 
+  857000      100    2.6838029    1.4372858         6600 
+  858000      100    2.6837865    1.4415626         6600 
+  859000      100    2.6902051    1.4452311         6600 
+  860000      100    2.6952117     1.445638         6600 
+  861000      100    2.6991863     1.444193         6600 
+  862000      100    2.7037961     1.444891         6600 
+  863000      100    2.7020607    1.4415369         6600 
+  864000      100    2.6991431    1.4353364         6600 
+  865000      100    2.7028303    1.4329268         6600 
+  866000      100    2.7087922    1.4323974         6600 
+  867000      100    2.7132987    1.4319607         6600 
+  868000      100    2.7115346    1.4319508         6600 
+  869000      100    2.7157193    1.4323138         6600 
+  870000      100    2.7237907    1.4327295         6600 
+  871000      100    2.5979069    1.4177829         6600 
+  872000      100    2.4120251    1.3756378         6600 
+  873000      100    2.4032401    1.3523434         6600 
+  874000      100    2.4382424    1.3446372         6600 
+  875000      100    2.4439142    1.3322708         6600 
+  876000      100    2.4267466    1.3246194         6600 
+  877000      100    2.4078751    1.3232746         6600 
+  878000      100    2.3878684    1.3234645         6600 
+  879000      100    2.3543045    1.3212497         6600 
+  880000      100    2.3439308    1.3149143         6600 
+  881000      100    2.3466195    1.3109682         6600 
+  882000      100    2.3483259    1.3084247         6600 
+  883000      100    2.3469497    1.3042258         6600 
+  884000      100    2.3436595    1.3033465         6600 
+  885000      100    2.3389813    1.3046455         6600 
+  886000      100    2.3288678    1.3029841         6600 
+  887000      100    2.3208885    1.3031638         6600 
+  888000      100    2.3154104     1.304698         6600 
+  889000      100    2.3128526    1.3050017         6600 
+  890000      100    2.3017744    1.3038569         6600 
+  891000      100    2.2892855    1.3053656         6600 
+  892000      100    2.2816061    1.3104869         6600 
+  893000      100    2.2730554    1.3128776         6600 
+  894000      100    2.2682287    1.3123453         6600 
+  895000      100    2.2646337    1.3124582         6600 
+  896000      100    2.2580135    1.3151004         6600 
+  897000      100    2.2513175     1.319409         6600 
+  898000      100    2.2472028    1.3218335         6600 
+  899000      100    2.2463401    1.3201935         6600 
+  900000      100    2.2485743    1.3158661         6600 
+  901000      100    2.2526806    1.3105744         6600 
+  902000      100    2.2567872    1.3058872         6600 
+  903000      100    2.2594753    1.3028771         6600 
+  904000      100    2.2597596    1.3024884         6600 
+  905000      100    2.2577879    1.3041035         6600 
+  906000      100    2.2561105    1.3053711         6600 
+  907000      100    2.2552527    1.3061106         6600 
+  908000      100    2.2556774    1.3056861         6600 
+  909000      100    2.2574584    1.3042258         6600 
+  910000      100    2.2441354    1.2990424         6600 
+  911000      100     2.243242    1.2892731         6600 
+  912000      100     2.247544    1.2835411         6600 
+  913000      100    2.2455176    1.2808631         6600 
+  914000      100    2.2422926    1.2816283         6600 
+  915000      100     2.238155    1.2851897         6600 
+  916000      100    2.2336081    1.2899779         6600 
+  917000      100    2.2300364    1.2940522         6600 
+  918000      100    2.2288041    1.2958148         6600 
+  919000      100    2.2305803    1.2945685         6600 
+  920000      100    2.2188944    1.2896752         6600 
+  921000      100    2.2102515     1.284383         6600 
+  922000      100    2.2113927     1.282605         6600 
+  923000      100    2.2106694    1.2796477         6600 
+  924000      100    2.2089344    1.2790717         6600 
+  925000      100    2.2066107    1.2813189         6600 
+  926000      100    2.2039181     1.284855         6600 
+  927000      100    2.2010391    1.2882435         6600 
+  928000      100    2.1995273    1.2898749         6600 
+  929000      100    2.1991271    1.2893914         6600 
+  930000      100    2.1940494    1.2875348         6600 
+  931000      100    2.1088765    1.2710668         6600 
+  932000      100    2.0972403    1.2506438         6600 
+  933000      100    2.1009327    1.2427265         6600 
+  934000      100    2.0860314    1.2378781         6600 
+  935000      100    2.0796663    1.2354654         6600 
+  936000      100    2.0761932     1.233633         6600 
+  937000      100    2.0735761    1.2334082         6600 
+  938000      100    2.0705391    1.2335134         6600 
+  939000      100    2.0689877    1.2343452         6600 
+  940000      100    2.0345397    1.2349588         6600 
+  941000      100    1.9980924    1.2341363         6600 
+  942000      100     1.996452    1.2318129         6600 
+  943000      100    2.0045504    1.2286386         6600 
+  944000      100    2.0053545    1.2252401         6600 
+  945000      100    2.0001074    1.2228588         6600 
+  946000      100    1.9962097     1.222144         6600 
+  947000      100    1.9923788    1.2226012         6600 
+  948000      100    1.9888152    1.2235634         6600 
+  949000      100    1.9860145    1.2241943         6600 
+  950000      100    1.9843289    1.2238765         6600 
+  951000      100    1.9838567    1.2224857         6600 
+  952000      100    1.9845646      1.22012         6600 
+  953000      100      1.98624    1.2168987         6600 
+  954000      100    1.9822393    1.2137479         6600 
+  955000      100    1.9519504    1.2074425         6600 
+  956000      100    1.9463332    1.2055191         6600 
+  957000      100     1.944165    1.2076876         6600 
+  958000      100    1.9360287    1.2082058         6600 
+  959000      100    1.9318821     1.209287         6600 
+  960000      100     1.930359    1.2089664         6600 
+  961000      100     1.931353    1.2070089         6600 
+  962000      100    1.9340825    1.2038963         6600 
+  963000      100    1.9372212    1.2005383         6600 
+  964000      100    1.9393562    1.1980086         6600 
+  965000      100    1.9353499    1.1967083         6600 
+  966000      100    1.9317056     1.195978         6600 
+  967000      100     1.930128    1.1963577         6600 
+  968000      100     1.928721    1.1977973         6600 
+  969000      100    1.9257605    1.1993253         6600 
+  970000      100    1.9233178    1.1980913         6600 
+  971000      100    1.9236128    1.1953748         6600 
+  972000      100    1.9271622    1.1909159         6600 
+  973000      100    1.9313378    1.1862165         6600 
+  974000      100    1.9344202    1.1822512         6600 
+  975000      100    1.9355632    1.1802318         6600 
+  976000      100     1.933457    1.1815969         6600 
+  977000      100    1.9285976    1.1861242         6600 
+  978000      100    1.9227688    1.1920461         6600 
+  979000      100    1.9177681     1.197211         6600 
+  980000      100    1.9153251    1.1996271         6600 
+  981000      100    1.9163287    1.1984469         6600 
+  982000      100    1.9201012    1.1945879         6600 
+  983000      100    1.9113796    1.1807694         6600 
+  984000      100    1.9041167    1.1623916         6600 
+  985000      100    1.9066382    1.1541435         6600 
+  986000      100    1.9020525    1.1503922         6600 
+  987000      100    1.8970916     1.150916         6600 
+  988000      100    1.8816399    1.1539693         6600 
+  989000      100    1.8566853    1.1551135         6600 
+  990000      100    1.8439955    1.1541989         6600 
+  991000      100     1.847875    1.1520578         6600 
+  992000      100    1.8534668    1.1477341         6600 
+  993000      100     1.852353    1.1423664         6600 
+  994000      100     1.843552    1.1344678         6600 
+  995000      100    1.8436777    1.1291963         6600 
+  996000      100    1.8426513    1.1275945         6600 
+  997000      100    1.8371356    1.1287616         6600 
+  998000      100    1.8308036    1.1336388         6600 
+  999000      100    1.8245745    1.1393284         6600 
+ 1000000      100    1.8202474    1.1437391         6600 
+ 1000001      100    1.8202446    1.1437422         6600 
+Loop time of 8.26635 on 1 procs for 1000000 steps with 100 atoms
+
+Performance: 104520.082 tau/day, 120972.317 timesteps/s
+98.5% CPU use with 1 MPI tasks x 1 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0.63573    | 0.63573    | 0.63573    |   0.0 |  7.69
+Neigh   | 0.018451   | 0.018451   | 0.018451   |   0.0 |  0.22
+Comm    | 0.05256    | 0.05256    | 0.05256    |   0.0 |  0.64
+Output  | 1.0767     | 1.0767     | 1.0767     |   0.0 | 13.03
+Modify  | 5.8469     | 5.8469     | 5.8469     |   0.0 | 70.73
+Other   |            | 0.636      |            |       |  7.69
+
+Nlocal:    100 ave 100 max 100 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    40 ave 40 max 40 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 40
+Ave neighs/atom = 0.4
+Neighbor list builds = 325
+Dangerous builds = 0
+Total wall time: 0:00:08
