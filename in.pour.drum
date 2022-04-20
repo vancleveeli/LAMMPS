@@ -18,10 +18,10 @@ variable        boxz equal 50
 variable        part_r equal 0.25
 variable        part_d equal 2.0*${part_r}
 
-variable        N_part equal 7000 #number of particles
-variable        t_inbet_drop equal 15000  #time between drops (the run in the loop)
+variable        N_part equal 100000 #number of particles
+variable        t_inbet_drop equal 20000  #time between drops (the run in the loop)
 variable        loopN equal ${N_part}  # number of loops to run
-variable        drop_t equal ${t_inbet_drop}/1  #take image every this many steps.
+variable        drop_t equal ${t_inbet_drop}*1  #take image every this many steps.
 variable        run_end equal 50000
 variable        total_runs equal ${N_part}*${t_inbet_drop}+${run_end}
 
@@ -122,13 +122,13 @@ timestep        0.00001
 #run             1000
 
 dump		2 all image ${drop_t} jpg/image.*.jpg type type axes yes 0.8 0.02 view 80 -30 size 6400 3600#6400 3600
-dump		3 all image ${drop_t} jpg/image.top.*.jpg type type axes yes 0.8 0.02 view 0 0 size 6400 3600#6400 3600
+#dump		3 all image ${drop_t} jpg/image.top.*.jpg type type axes yes 0.8 0.02 view 0 0 #size 6400 3600#6400 3600
 
 # Modify the parameters of a previously defined dump command.  
 # (ID)  (pad = # of characters to convert timestep to)  (# of characters to convert timestep to)
 
 dump_modify	2 pad 5
-dump_modify	3 pad 5
+#dump_modify	3 pad 5
 
 #Remove any particles that are above z > 0.5*drum_height
 #delete_atoms    group delgroup
@@ -152,7 +152,7 @@ variable         sedN equal 1234
 
 label            loop
 variable         a loop ${loopN}
-variable         seds equal ${sedN}#*${a}
+variable         seds equal ${sedN}*${a}
 variable         remain equal ${loopN}-${a}
 print            "a = ${a}"
 print            "Sed = ${sedN}"
